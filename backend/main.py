@@ -14,14 +14,21 @@ load_dotenv()
 app = FastAPI(title="SolarPal API", description="Solar irradiance data API for the Philippines")
 
 # Get allowed origins from environment variable or use defaults
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else [
-    "http://localhost:3000",  # Next.js default port
-    "http://localhost:3001",  # Alternative Next.js port
-    "http://localhost:3002",  # Alternative Next.js port
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-    "http://127.0.0.1:3002",
-]
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",")]
+else:
+    allowed_origins = [
+        "http://localhost:3000",  # Next.js default port
+        "http://localhost:3001",  # Alternative Next.js port
+        "http://localhost:3002",  # Alternative Next.js port
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
+        "https://solarpal-delta.vercel.app",  # Vercel deployment
+    ]
+
+print(f"🌐 CORS allowed origins: {allowed_origins}")
 
 # Enable CORS for frontend access
 app.add_middleware(
