@@ -9,6 +9,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.18
+      - key: ALLOWED_ORIGINS
+        value: "http://localhost:3000,https://your-frontend-domain.vercel.app,https://your-frontend-domain.netlify.app"
     # Optional: Custom domains
     # domains:
     #   - solarpal-api.yourdomain.com

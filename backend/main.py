@@ -6,20 +6,27 @@ from typing import Dict, Any, List
 import statistics
 from datetime import datetime, timedelta
 import asyncio
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI(title="SolarPal API", description="Solar irradiance data API for the Philippines")
+
+# Get allowed origins from environment variable or use defaults
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else [
+    "http://localhost:3000",  # Next.js default port
+    "http://localhost:3001",  # Alternative Next.js port
+    "http://localhost:3002",  # Alternative Next.js port
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+]
 
 # Enable CORS for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Next.js default port
-        "http://localhost:3001",  # Alternative Next.js port
-        "http://localhost:3002",  # Alternative Next.js port
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://127.0.0.1:3002",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
