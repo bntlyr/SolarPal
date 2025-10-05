@@ -2,9 +2,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 import statistics
 from datetime import datetime, timedelta
+import asyncio
 
 app = FastAPI(title="SolarPal API", description="Solar irradiance data API for the Philippines")
 
@@ -166,6 +167,198 @@ async def get_solar_data(lat: float, lon: float) -> Dict[str, Any]:
         raise HTTPException(status_code=502, detail=f"NASA API error: {e.response.status_code}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.get("/api/solar-zones")
+async def get_solar_zones() -> Dict[str, Any]:
+    """
+    Get dynamic solar zones based on NASA POWER API data for Philippines regions.
+    This replaces hardcoded zones with real-time solar irradiance data.
+    """
+    # Define strategic sampling points across Philippines regions
+    # These represent diverse geographic and climatic areas
+    sampling_points = [
+        # Luzon regions
+        {"name": "Metro Manila", "lat": 14.5995, "lng": 120.9842, "region": "NCR"},
+        {"name": "Central Luzon Plains", "lat": 15.3, "lng": 120.9, "region": "Central Luzon"},
+        {"name": "Ilocos Coast", "lat": 17.3, "lng": 120.6, "region": "Ilocos"},
+        {"name": "Cagayan Valley", "lat": 17.2, "lng": 121.8, "region": "Cagayan Valley"},
+        {"name": "Cordillera Mountains", "lat": 16.8, "lng": 121.0, "region": "CAR"},
+        {"name": "Bicol Peninsula", "lat": 13.3, "lng": 123.7, "region": "Bicol"},
+        {"name": "Southern Tagalog", "lat": 14.1, "lng": 121.5, "region": "CALABARZON"},
+        
+        # Visayas regions
+        {"name": "Western Visayas", "lat": 11.2, "lng": 122.5, "region": "Western Visayas"},
+        {"name": "Central Visayas", "lat": 10.3, "lng": 123.9, "region": "Central Visayas"},
+        {"name": "Eastern Visayas", "lat": 11.6, "lng": 125.0, "region": "Eastern Visayas"},
+        {"name": "Negros Island", "lat": 10.3, "lng": 123.1, "region": "Negros"},
+        {"name": "Bohol Island", "lat": 9.8, "lng": 124.1, "region": "Bohol"},
+        
+        # Mindanao regions
+        {"name": "Northern Mindanao", "lat": 8.7, "lng": 124.7, "region": "Northern Mindanao"},
+        {"name": "Davao Region", "lat": 7.3, "lng": 125.7, "region": "Davao"},
+        {"name": "SOCCSKSARGEN", "lat": 6.7, "lng": 124.8, "region": "SOCCSKSARGEN"},
+        {"name": "Caraga Region", "lat": 9.0, "lng": 125.8, "region": "Caraga"},
+        {"name": "Zamboanga Peninsula", "lat": 7.8, "lng": 123.1, "region": "Zamboanga"},
+        {"name": "ARMM Region", "lat": 7.2, "lng": 124.3, "region": "ARMM"},
+        
+        # Island provinces
+        {"name": "Palawan", "lat": 9.8, "lng": 118.7, "region": "MIMAROPA"},
+        {"name": "Mindoro", "lat": 13.0, "lng": 121.0, "region": "Mindoro"},
+        {"name": "Masbate", "lat": 12.4, "lng": 123.6, "region": "Masbate"}
+    ]
+    
+    try:
+        # Fetch solar data for all sampling points concurrently
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            tasks = []
+            for point in sampling_points:
+                task = fetch_solar_data_for_point(client, point)
+                tasks.append(task)
+            
+            # Execute all requests concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results and create dynamic zones
+            zones = []
+            successful_results = []
+            
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    print(f"Error fetching data for {sampling_points[i]['name']}: {result}")
+                    continue
+                    
+                if result:
+                    successful_results.append(result)
+                    zones.append(create_zone_from_data(result))
+            
+            # Calculate statistics
+            if successful_results:
+                scores = [r['solar_score'] for r in successful_results]
+                irradiances = [r['avg_irradiance'] for r in successful_results]
+                
+                stats = {
+                    "total_zones": len(zones),
+                    "avg_solar_score": round(statistics.mean(scores), 1),
+                    "avg_irradiance": round(statistics.mean(irradiances), 2),
+                    "max_score": max(scores),
+                    "min_score": min(scores),
+                    "last_updated": datetime.now().isoformat(),
+                    "data_source": "NASA POWER API"
+                }
+            else:
+                raise HTTPException(status_code=503, detail="Unable to fetch solar data for any regions")
+            
+            return {
+                "zones": zones,
+                "statistics": stats,
+                "metadata": {
+                    "description": "Dynamic solar zones based on real-time NASA POWER API data",
+                    "update_frequency": "Real-time based on last 30 days of data",
+                    "coverage": "Philippines archipelago strategic sampling points"
+                }
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate solar zones: {str(e)}")
+
+async def fetch_solar_data_for_point(client: httpx.AsyncClient, point: Dict[str, Any]) -> Dict[str, Any]:
+    """Fetch solar data for a specific sampling point."""
+    try:
+        # Calculate date range (last 30 days)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=30)
+        start_str = start_date.strftime("%Y%m%d")
+        end_str = end_date.strftime("%Y%m%d")
+        
+        # NASA POWER API URL
+        nasa_url = (
+            "https://power.larc.nasa.gov/api/temporal/daily/point"
+            f"?parameters=ALLSKY_SFC_SW_DWN"
+            f"&community=RE"
+            f"&longitude={point['lng']}"
+            f"&latitude={point['lat']}"
+            f"&start={start_str}"
+            f"&end={end_str}"
+            f"&format=JSON"
+        )
+        
+        response = await client.get(nasa_url)
+        response.raise_for_status()
+        
+        data = response.json()
+        daily_values = data["properties"]["parameter"]["ALLSKY_SFC_SW_DWN"]
+        
+        # Convert to list and calculate average
+        irradiance_values = [float(value) for value in daily_values.values() if value != -999.0]
+        
+        if not irradiance_values:
+            return None
+            
+        avg_irradiance = statistics.mean(irradiance_values)
+        solar_analysis = calculate_solar_score(avg_irradiance, irradiance_values)
+        
+        return {
+            "name": point["name"],
+            "region": point["region"],
+            "lat": point["lat"],
+            "lng": point["lng"],
+            "avg_irradiance": round(avg_irradiance, 2),
+            "solar_score": solar_analysis["score"],
+            "rating": solar_analysis["rating"],
+            "recommendation": solar_analysis["recommendation"],
+            "consistency_score": solar_analysis["consistency_score"],
+            "min_irradiance": solar_analysis["min_irradiance"],
+            "max_irradiance": solar_analysis["max_irradiance"],
+            "data_points": len(irradiance_values)
+        }
+        
+    except Exception as e:
+        print(f"Error fetching data for {point['name']}: {e}")
+        return None
+
+def create_zone_from_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a zone object from solar data."""
+    # Determine zone type based on solar score
+    if data["solar_score"] >= 85:
+        zone_type = "excellent"
+        color = "#22c55e"
+    elif data["solar_score"] >= 70:
+        zone_type = "good" 
+        color = "#eab308"
+    elif data["solar_score"] >= 55:
+        zone_type = "fair"
+        color = "#f97316"
+    else:
+        zone_type = "low"
+        color = "#ef4444"
+    
+    # Create approximate zone boundaries (±0.5 degrees around sampling point)
+    lat, lng = data["lat"], data["lng"]
+    coordinates = [
+        [lat + 0.5, lng - 0.5],
+        [lat + 0.5, lng + 0.5], 
+        [lat - 0.5, lng + 0.5],
+        [lat - 0.5, lng - 0.5]
+    ]
+    
+    return {
+        "id": f"nasa-{data['region'].lower().replace(' ', '-')}",
+        "name": data["name"],
+        "region": data["region"],
+        "type": zone_type,
+        "color": color,
+        "score": data["solar_score"],
+        "coordinates": coordinates,
+        "center": [lat, lng],
+        "avg_irradiance": data["avg_irradiance"],
+        "rating": data["rating"],
+        "recommendation": data["recommendation"],
+        "consistency_score": data["consistency_score"],
+        "min_irradiance": data["min_irradiance"],
+        "max_irradiance": data["max_irradiance"],
+        "data_source": "NASA POWER API",
+        "last_updated": datetime.now().isoformat()
+    }
 
 if __name__ == "__main__":
     import uvicorn
