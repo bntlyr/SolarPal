@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -13,7 +13,11 @@ export const metadata: Metadata = {
   description: "Find the best locations for solar panels in the Philippines using NASA POWER data",
   keywords: ["solar", "Philippines", "renewable energy", "NASA POWER", "solar panels"],
   authors: [{ name: "SolarPal Team" }],
-  viewport: "width=device-width, initial-scale=1",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
   themeColor: "#f59e0b",
 };
 

@@ -358,7 +358,7 @@ export default function HomePage() {
               <div className="text-xs text-muted-foreground">Avg Irradiance (kWh/m²/day)</div>
             </div>
             <div className="text-center p-3 bg-muted rounded-lg">
-              <div className="text-lg font-bold text-green-600">{consistency_score}%</div>
+              <div className="text-lg font-bold text-green-600">{consistency_score ?? 'N/A'}%</div>
               <div className="text-xs text-muted-foreground">Consistency Score</div>
             </div>
           </div>
@@ -369,15 +369,15 @@ export default function HomePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>
                 <div className="text-muted-foreground">Min Irradiance</div>
-                <div className="font-medium">{min_irradiance} kWh/m²/day</div>
+                <div className="font-medium">{min_irradiance ?? 'N/A'} kWh/m²/day</div>
               </div>
               <div>
                 <div className="text-muted-foreground">Max Irradiance</div>
-                <div className="font-medium">{max_irradiance} kWh/m²/day</div>
+                <div className="font-medium">{max_irradiance ?? 'N/A'} kWh/m²/day</div>
               </div>
               <div>
                 <div className="text-muted-foreground">Est. Annual Production</div>
-                <div className="font-medium">{estimated_annual_kwh_per_kw.toLocaleString()} kWh/kW</div>
+                <div className="font-medium">{estimated_annual_kwh_per_kw?.toLocaleString() ?? 'N/A'} kWh/kW</div>
               </div>
               <div>
                 <div className="text-muted-foreground">Location</div>
@@ -393,7 +393,7 @@ export default function HomePage() {
               {formatCoordinates(coordinates.latitude, coordinates.longitude)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              {analysis_note}
+              {analysis_note ?? ''}
             </div>
           </div>
         </CardContent>
