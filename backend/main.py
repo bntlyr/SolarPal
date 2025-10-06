@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
@@ -99,7 +99,49 @@ def get_location_name(lat: float, lon: float) -> str:
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"message": "SolarPal API is running!", "status": "healthy"}
+    return {"message": "SolarPal API is running!", "status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.get("/keep-alive")
+async def keep_alive():
+    """Keep-alive endpoint to prevent the service from sleeping."""
+    return {
+        "status": "alive", 
+        "message": "Service is awake",
+        "timestamp": datetime.now().isoformat()
+    }
+
+# Keep-alive background task
+async def self_ping():
+    """Ping the service every 10 minutes to keep it awake."""
+    while True:
+        try:
+            await asyncio.sleep(600)  # Wait 10 minutes (600 seconds)
+            
+            # Get the service URL from environment or use default
+            service_url = os.getenv("SERVICE_URL", "https://solarpal.onrender.com")
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(f"{service_url}/keep-alive")
+                if response.status_code == 200:
+                    print(f"✅ Keep-alive ping successful at {datetime.now().isoformat()}")
+                else:
+                    print(f"⚠️ Keep-alive ping failed with status {response.status_code}")
+        except Exception as e:
+            print(f"❌ Keep-alive ping error: {e}")
+
+# Start the keep-alive task when the app starts
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on app startup."""
+    print("🚀 Starting SolarPal API...")
+    print(f"🌐 CORS allowed origins: {allowed_origins}")
+    
+    # Only start keep-alive in production (when SERVICE_URL is set)
+    if os.getenv("SERVICE_URL"):
+        print("🔄 Starting keep-alive background task...")
+        asyncio.create_task(self_ping())
+    else:
+        print("🏠 Running in development mode - keep-alive disabled")
 
 @app.get("/api/solar")
 async def get_solar_data(lat: float, lon: float) -> Dict[str, Any]:

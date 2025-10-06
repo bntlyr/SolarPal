@@ -41,6 +41,11 @@ interface AppState {
   searchQuery: string;
   isMobilePanelOpen: boolean;
   searching: boolean;
+  keepAliveStatus: {
+    isActive: boolean;
+    lastPing: Date | null;
+    pingCount: number;
+  };
 }
 
 export default function HomePage() {
@@ -60,6 +65,11 @@ export default function HomePage() {
     searchQuery: '',
     isMobilePanelOpen: false,
     searching: false,
+    keepAliveStatus: {
+      isActive: false,
+      lastPing: null,
+      pingCount: 0,
+    },
   });
 
   // Check backend connection on mount
@@ -78,6 +88,63 @@ export default function HomePage() {
     };
     
     checkBackend();
+  }, []);
+
+  // Keep-alive functionality
+  useEffect(() => {
+    let keepAliveInterval: NodeJS.Timeout;
+
+    const pingBackend = async () => {
+      try {
+        await apiService.keepAlive();
+        setState(prev => ({
+          ...prev,
+          keepAliveStatus: {
+            isActive: true,
+            lastPing: new Date(),
+            pingCount: prev.keepAliveStatus.pingCount + 1,
+          }
+        }));
+        console.log(`✅ Keep-alive ping successful at ${new Date().toLocaleString()}`);
+      } catch (error) {
+        console.log(`❌ Keep-alive ping failed:`, error);
+        setState(prev => ({
+          ...prev,
+          keepAliveStatus: {
+            ...prev.keepAliveStatus,
+            isActive: false,
+          }
+        }));
+      }
+    };
+
+    // Only start keep-alive in production (when API URL is not localhost)
+    const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    if (!apiUrl.includes('localhost') && !apiUrl.includes('127.0.0.1')) {
+      console.log('🔄 Starting keep-alive monitor for production backend...');
+      
+      // Initial ping after 30 seconds
+      setTimeout(pingBackend, 30000);
+      
+      // Then ping every 10 minutes
+      keepAliveInterval = setInterval(pingBackend, 10 * 60 * 1000);
+      
+      setState(prev => ({
+        ...prev,
+        keepAliveStatus: {
+          ...prev.keepAliveStatus,
+          isActive: true,
+        }
+      }));
+    } else {
+      console.log('🏠 Development mode - keep-alive disabled');
+    }
+
+    return () => {
+      if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+      }
+    };
   }, []);
 
   const handleLocationSelect = async (lat: number, lng: number) => {
@@ -649,7 +716,7 @@ export default function HomePage() {
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>
-                  Backend service is not available. Please ensure the FastAPI server is running on port 8000.
+                  Backend service is not available. Please ensure the FastAPI server is running.
                 </AlertDescription>
               </Alert>
             )}

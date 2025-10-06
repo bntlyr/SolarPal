@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SolarPal Keep-Alive Monitor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .online { background: #d4edda; color: #155724; }
+        .offline { background: #f8d7da; color: #721c24; }
+        .log { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 4px; 
+            max-height: 300px; 
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌞 SolarPal Keep-Alive Monitor</h1>
+        <p>This page automatically pings the SolarPal backend every 10 minutes to keep it awake.</p>
+        
+        <div id="status" class="status offline">🔴 Checking status...</div>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="pingNow()">🔄 Ping Now</button>
+            <button id="toggleBtn" onclick="toggleMonitoring()">⏸️ Pause</button>
+            <button onclick="clearLog()">🗑️ Clear Log</button>
+        </div>
+        
+        <h3>📋 Activity Log</h3>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        const SERVICE_URL = 'https://solarpal.onrender.com';
+        const PING_INTERVAL = 10 * 60 * 1000; // 10 minutes
+        
+        let isMonitoring = true;
+        let intervalId = null;
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleString();
+            const logEl = document.getElementById('log');
+            logEl.innerHTML += `[${timestamp}] ${message}\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        function updateStatus(isOnline, message) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${isOnline ? 'online' : 'offline'}`;
+            statusEl.innerHTML = `${isOnline ? '🟢' : '🔴'} ${message}`;
+        }
+        
+        async function pingService() {
+            try {
+                log('📡 Pinging SolarPal backend...');
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
+                const response = await fetch(`${SERVICE_URL}/keep-alive`, {
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Ping successful! Status: ${data.status}`);
+                    updateStatus(true, 'Backend is online and healthy');
+                    return true;
+                } else {
+                    log(`❌ Ping failed with HTTP ${response.status}`);
+                    updateStatus(false, `Backend returned HTTP ${response.status}`);
+                    return false;
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    log('⏱️ Ping timeout (30 seconds)');
+                    updateStatus(false, 'Backend timeout - may be sleeping');
+                } else {
+                    log(`❌ Ping error: ${error.message}`);
+                    updateStatus(false, `Error: ${error.message}`);
+                }
+                return false;
+            }
+        }
+        
+        function pingNow() {
+            pingService();
+        }
+        
+        function toggleMonitoring() {
+            const toggleBtn = document.getElementById('toggleBtn');
+            
+            if (isMonitoring) {
+                clearInterval(intervalId);
+                isMonitoring = false;
+                toggleBtn.textContent = '▶️ Resume';
+                log('⏸️ Monitoring paused');
+            } else {
+                startMonitoring();
+                isMonitoring = true;
+                toggleBtn.textContent = '⏸️ Pause';
+                log('▶️ Monitoring resumed');
+            }
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function startMonitoring() {
+            intervalId = setInterval(pingService, PING_INTERVAL);
+        }
+        
+        // Initialize
+        window.onload = function() {
+            log('🚀 SolarPal Keep-Alive Monitor started');
+            log(`⏰ Will ping every ${PING_INTERVAL / 60000} minutes`);
+            
+            // Initial ping
+            pingService();
+            
+            // Start regular monitoring
+            startMonitoring();
+        };
+    </script>
+</body>
+</html>

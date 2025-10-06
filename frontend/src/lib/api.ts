@@ -148,6 +148,24 @@ export const apiService = {
     }
   },
 
+  // Keep-alive endpoint to prevent backend from sleeping
+  async keepAlive(): Promise<{ status: string; message: string; timestamp: string }> {
+    try {
+      console.log('🔄 Sending keep-alive ping...');
+      const response = await api.get('/keep-alive', { timeout: 30000 });
+      console.log('✅ Keep-alive ping successful:', response.data);
+      return response.data;
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError;
+      console.error('❌ Keep-alive ping failed:', {
+        message: (error as Error).message,
+        code: axiosError.code,
+        status: axiosError.response?.status,
+      });
+      throw new Error('Keep-alive ping failed');
+    }
+  },
+
   // Get solar data for coordinates with enhanced error handling
   async getSolarData(latitude: number, longitude: number): Promise<SolarData> {
     try {
